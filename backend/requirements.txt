@@ -1,1 +1,6 @@
-# requirements.txt - Placeholder
+langchain
+openai
+chromadb
+fastapi
+uvicorn
+python-dotenv
