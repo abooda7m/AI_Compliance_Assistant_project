@@ -1,26 +1,5 @@
 # # backend/app/routers/qa.py
 
-# from fastapi import APIRouter
-# from app.models import QARequest, QAResponse
-# from app.chains import make_manual_qa_chain
-
-# router = APIRouter()
-
-# @router.post("/qa", response_model=QAResponse)
-# def simple_qa(req: QARequest):
-#     run_qa = make_manual_qa_chain()
-#     answer, docs = run_qa(req.question)
-
-#     citations = [
-#         f"{d.metadata.get('source_file','?')} | page {d.metadata.get('page','?')} | {d.metadata.get('group','?')}"
-#         for d in docs
-#     ]
-
-#     return QAResponse(answer=answer, citations=citations)
-
-
-
-
 from fastapi import APIRouter, HTTPException
 from app.models import QARequest, QAResponse
 from app.chains import make_manual_qa

@@ -27,3 +27,4 @@ for doc in documents:
     print(f"─ Chunk from {source}, page {page}, group {group} ─")
     print(doc.page_content)
     print()
+    
