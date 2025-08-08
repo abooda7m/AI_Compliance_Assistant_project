@@ -10,7 +10,7 @@ from langchain.prompts import ChatPromptTemplate
 load_dotenv()
 
 # 2️⃣ Paths & prompt template
-CHROMA_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "../chroma_db/chroma_db/regs"))
+CHROMA_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "../chroma_db/regs"))
 
 PROMPT_TEMPLATE = """You are a regulatory compliance assistant. Answer ONLY using the context.
 Context:
