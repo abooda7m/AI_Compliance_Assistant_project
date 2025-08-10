@@ -23,18 +23,18 @@ If any non-compliance is found, return violations with:
 Also provide an overall verdict: compliant or not.
 
 Return JSON:
-{
- "verdict": "compliant|non-compliant|unclear",
- "violations": [
-   {
-     "document": "...",
-     "page": "...",
-     "section": "...",
-     "regulation_citation": "file | page | group",
-     "explanation": "..."
-   }
- ]
-}
+{{
+  "verdict": "compliant|non-compliant|unclear",
+  "violations": [
+    {{
+      "document": "...",
+      "page": "...",
+      "section": "...",
+      "regulation_citation": "file | page | group",
+      "explanation": "..."
+    }}
+  ]
+}}
 
 # Regulation context
 {reg_context}
@@ -60,7 +60,7 @@ def audit_uploaded_file(path: str) -> Tuple[float, List[dict], List[str]]:
 
     for ch in chunks[:60]:  # cap for latency
         assessed_chunks += 1
-        regs = retriever.get_relevant_documents(ch.page_content)
+        regs = retriever.invoke(ch.page_content)
         reg_context = "\n\n---\n\n".join(
             f"[{d.metadata.get('source_file','?')} | p.{d.metadata.get('page','?')} | {d.metadata.get('group','?')}]\n{d.page_content}"
             for d in regs

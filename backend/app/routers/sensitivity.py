@@ -1,17 +1,16 @@
 from fastapi import APIRouter, HTTPException, Query
 from app.models_upload import SensitivityReport, SensitivityFinding
-from app.utils_files import load_and_chunk
+from app.utils_files import load_and_chunk , UPLOAD_DIR
 from app.sensitivity_rules import find_matches
 from app.sensitivity_llm import judge_snippet
+import os
 
 router = APIRouter()
 
 @router.get("/sensitivity", response_model=SensitivityReport)
 def check_sensitivity(file_id: str = Query(...)):
     # Resolve path
-    import os
-    UPLOADS = os.path.abspath(os.path.join(os.path.dirname(__file__), "../uploads/tmp"))
-    path = os.path.join(UPLOADS, file_id)
+    path = os.path.join(UPLOAD_DIR, file_id)
     if not os.path.exists(path):
         raise HTTPException(404, "File not found. Upload first.")
 
