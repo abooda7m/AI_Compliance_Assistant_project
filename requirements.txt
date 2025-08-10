@@ -9,3 +9,4 @@ pydantic
 langchain_openai
 langchain_chroma
 os
+uuid

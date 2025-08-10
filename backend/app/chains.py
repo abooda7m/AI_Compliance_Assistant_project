@@ -40,13 +40,13 @@ def make_manual_qa():
     prompt_template = ChatPromptTemplate.from_template(PROMPT_TEMPLATE)
     model           = ChatOpenAI( model_name="gpt-4")
 
-    def run_qa(question: str, k: int = 5, threshold: float = 0.5):
+    def run_qa(question: str, k: int = 5, threshold: float = 0.7):
         # 1) Retrieve top-k docs + their relevance scores
         results = db.similarity_search_with_relevance_scores(question, k=k)
 
         # 2) Bail out if no doc is above the threshold
-        # if not results or results[0][1] < threshold:
-        #     return None, []
+        if not results or results[0][1] < threshold:
+            return None, []
 
         # 3) Build the context string from the retrieved chunks
         context = "\n\n---\n\n".join(
