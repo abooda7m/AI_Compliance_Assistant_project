@@ -1,0 +1,11 @@
+Title: Example Policy With Gaps (Non‑Compliant Demo)
+
+- We collect all user information we can access, including optional fields, for any future business purpose.
+- We may sell or share personal data with partners and advertisers at our discretion.
+- We do not request explicit consent; use of the service is considered blanket consent.
+- We keep personal data indefinitely and do not guarantee deletion even upon request.
+- We do not maintain formal breach notification procedures.
+- We may transfer data internationally without additional safeguards.
+- Requests from individuals will be reviewed at our convenience.
+
+NOTE: This file is synthetic and intentionally problematic for testing.

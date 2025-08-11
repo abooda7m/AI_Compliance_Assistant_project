@@ -1,0 +1,30 @@
+Title: Example Privacy & Data Protection Policy (Compliant-ish Demo)
+
+1) Lawful Basis & Consent
+   - We obtain explicit, informed, and unambiguous consent prior to processing personal data.
+   - Users may withdraw consent at any time through the privacy portal; withdrawal is honored within 72 hours.
+
+2) Data Minimization & Purpose Limitation
+   - We collect only the minimum personal data necessary to provide the service and for the stated purposes.
+
+3) Data Subject Rights (DSRs)
+   - Individuals may request access, rectification, deletion, and restriction via privacy@example.org.
+   - We acknowledge and fulfill DSRs within 15 calendar days.
+
+4) Retention & Deletion
+   - Personal data is retained for up to 365 days unless a longer period is required by law, after which it is deleted or irreversibly anonymized.
+
+5) Security & Breach Notification
+   - We apply appropriate technical and organizational safeguards.
+   - We notify the competent authority and impacted individuals of a personal data breach without undue delay and within 72 hours where required.
+
+6) International Transfers
+   - We do not transfer personal data outside the Kingdom unless permitted conditions are met and adequate safeguards are in place.
+
+7) Records & DPIA
+   - We maintain records of processing activities and conduct risk assessments/DPIAs for high‑risk processing.
+
+8) Roles & Accountability
+   - We act as the data controller for core services and assign clear responsibilities for compliance oversight.
+
+NOTE: This file is synthetic and for testing only.
