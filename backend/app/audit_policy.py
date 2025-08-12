@@ -13,7 +13,7 @@ from app.utils_files import load_and_chunk  # your existing chunker
 # ---- Configuration -----------------------------------------------------------
 
 EMBED_MODEL   = os.getenv("OPENAI_EMBED_MODEL", "text-embedding-3-large")
-CHAT_MODEL    = os.getenv("OPENAI_CHAT_MODEL",  "gpt-4o-mini")  # or your preferred model
+CHAT_MODEL    = os.getenv("OPENAI_CHAT_MODEL",  "gpt-5-nano")  # or your preferred model
 BASE_DIR      = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 CHROMA_PATH   = os.getenv("CHROMA_PATH", os.path.join(BASE_DIR, "chroma_db", "regs"))
 COLLECTION    = os.getenv("CHROMA_COLLECTION", "langchain")     # match your DB collection
@@ -127,7 +127,7 @@ Rules:
 
 # ---- Main entry --------------------------------------------------------------
 
-def audit_uploaded_file(path: str, k: int = 6, min_rel: float = 0.60) -> dict:
+def audit_uploaded_file(path: str, k: int = 6, min_rel: float = 0.5) -> dict:
     """
     Audits an uploaded policy document against SDAIA regs.
     Returns a dict with: score, breakdown, violations, citations.
@@ -137,8 +137,7 @@ def audit_uploaded_file(path: str, k: int = 6, min_rel: float = 0.60) -> dict:
     """
     db  = build_regs_db()
     llm = ChatOpenAI(
-        model_name=CHAT_MODEL,
-        temperature=0,   # deterministic
+        model_name=CHAT_MODEL
     )
 
     # 1) Chunk the uploaded file
