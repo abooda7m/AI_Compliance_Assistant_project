@@ -66,7 +66,7 @@ def main():
         db.add_documents(chunks)
         total_chunks += len(chunks)
 
-    db.persist()
+
     print(f" Ingestion complete. Added {total_chunks} chunks.")
     print("Persist dir:", PERSIST_DIR)
     print("Collection :", COLLECTION)
