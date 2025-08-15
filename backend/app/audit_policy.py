@@ -9,7 +9,7 @@ from langchain_chroma import Chroma
 from langchain.prompts import ChatPromptTemplate
 
 from app.utils_files import load_and_chunk  # your existing chunker
-
+import math
 # ---- Configuration -----------------------------------------------------------
 
 EMBED_MODEL   = os.getenv("OPENAI_EMBED_MODEL", "text-embedding-3-large")
@@ -107,6 +107,7 @@ Using only the provided regulation context, assess the user policy chunk. Return
       "page": "...",
       "section": "...",    // MUST be copied from the regulation text below; if unsure use "Not specified"
       "regulation_citation": "file | page | group",
+      "value": "...",      // the specific policy text that violates the regulation
       "explanation": "..."
     }}
   ]
@@ -127,7 +128,7 @@ Rules:
 
 # ---- Main entry --------------------------------------------------------------
 
-def audit_uploaded_file(path: str, k: int = 6, min_rel: float = 0.5) -> dict:
+def audit_uploaded_file(path: str, k: int = 4, min_rel: float = 0.35) -> dict:
     """
     Audits an uploaded policy document against SDAIA regs.
     Returns a dict with: score, breakdown, violations, citations.
@@ -150,7 +151,7 @@ def audit_uploaded_file(path: str, k: int = 6, min_rel: float = 0.5) -> dict:
     # 2) For each chunk: retrieve strong regs context -> ask the LLM
     for ch in chunks[:60]:  # cap for speed/safety
         pairs  = db.similarity_search_with_relevance_scores(ch.page_content, k=k)
-        strong = [d for d, s in pairs if s >= min_rel][:4]
+        strong = [d for d, s in pairs if (math.ceil(s*20)/20) >= min_rel][:4]
 
         if not strong:
             unclear += 1

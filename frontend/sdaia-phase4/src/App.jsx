@@ -117,6 +117,7 @@ export default function App() {
                   <th>page</th>
                   <th align="left">section</th>
                   <th align="left">regulation_citation</th>
+                  <th align="left">value</th>
                   <th align="left">explanation</th>
                 </tr>
               </thead>
@@ -127,6 +128,7 @@ export default function App() {
                     <td align="center">{v.page ?? "-"}</td>
                     <td>{v.section ?? "-"}</td>
                     <td>{v.regulation_citation}</td>
+                    <td>{v.value}</td>
                     <td>{v.explanation}</td>
                   </tr>
                 ))}

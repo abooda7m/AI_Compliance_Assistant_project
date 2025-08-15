@@ -24,6 +24,7 @@ class Violation(BaseModel):
     page: Optional[str] = "Not specified"
     section: Optional[str] = None
     regulation_citation: str  # file | page | group
+    value: str                # the specific policy text that violates the regulation
     explanation: str
 
 class ComplianceReport(BaseModel):
