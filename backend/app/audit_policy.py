@@ -2,121 +2,92 @@
 
 import os
 import json
-from typing import List
+import math
+from typing import List, Tuple
 
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain_chroma import Chroma
 from langchain.prompts import ChatPromptTemplate
 
-from app.utils_files import load_and_chunk  # your existing chunker
-import math
+from app.utils_files import load_and_chunk  # existing chunker
+
+
 # ---- Configuration -----------------------------------------------------------
 
 EMBED_MODEL   = os.getenv("OPENAI_EMBED_MODEL", "text-embedding-3-large")
-CHAT_MODEL    = os.getenv("OPENAI_CHAT_MODEL",  "gpt-5-nano")  # or your preferred model
+CHAT_MODEL    = os.getenv("OPENAI_CHAT_MODEL",  "gpt-5-nano")  # safe default
 BASE_DIR      = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 CHROMA_PATH   = os.getenv("CHROMA_PATH", os.path.join(BASE_DIR, "chroma_db", "regs"))
-COLLECTION    = os.getenv("CHROMA_COLLECTION", "langchain")     # match your DB collection
+COLLECTION    = os.getenv("CHROMA_COLLECTION", "ksa_regs")     # unified collection
 
-# ---- Helpers (no regex) ------------------------------------------------------
+# ---- Metadata helpers --------------------------------------------------------
 
-def extract_section_simple(text: str) -> str:
+def _meta_basename(meta: dict) -> str:
     """
-    Prefer a heading-like line using only basic string ops (no regex).
+    Prefer our 'file' metadata from ingestion; fall back to basename of 'source'.
     """
-    for key in ("Article", "Section", "Clause"):
-        pos = text.find(key)
-        if pos != -1:
-            line = text[pos:].splitlines()[0].strip()
-            return (line[:140] + "…") if len(line) > 140 else line
-    # Fallback: first non-empty line
-    for line in text.splitlines():
-        line = line.strip()
-        if line:
-            return (line[:140] + "…") if len(line) > 140 else line
-    return "Not specified"
-
-
-def fix_section_no_regex(item: dict, context_docs: List) -> None:
-    """
-    Ensure 'section' is a sensible title from the provided regulation context.
-    Does not use regex. If the model gave an empty/metadata value, derive from the
-    first context doc. If the provided section text isn't actually in the context,
-    also derive from the first context doc.
-    """
-    if not context_docs:
-        item["section"] = item.get("section") or "Not specified"
-        return
-
-    sec = (item.get("section") or "").strip()
-    bad_vals = {"sdaia", "group", "n/a", "na"}
-
-    if not sec or sec.lower() in bad_vals:
-        item["section"] = extract_section_simple(context_docs[0].page_content)
-        return
-
-    # If the claimed section text doesn't appear in any context doc, fallback
-    if not any(sec in d.page_content for d in context_docs):
-        item["section"] = extract_section_simple(context_docs[0].page_content)
-
-
-def safe_json(text: str) -> dict:
-    """
-    Parse model output robustly without requiring JSON-mode.
-    Tries direct json.loads, then extracts the first {...} block.
-    """
-    try:
-        return json.loads(text)
-    except Exception:
-        pass
-
-    # crude brace extraction (still no regex)
-    start = text.find("{")
-    end   = text.rfind("}")
-    if start != -1 and end != -1 and end > start:
+    if meta.get("file"):
+        return meta["file"]
+    src = meta.get("source")
+    if src:
         try:
-            return json.loads(text[start:end + 1])
+            import os as _os
+            return _os.path.basename(src)
         except Exception:
-            pass
+            return src
+    return "?"
 
-    return {"verdict": "unclear", "violations": []}
+def _authority(meta: dict) -> str:
+    """Return authority (NCA/SDAIA) when present; fall back to 'domain'."""
+    return meta.get("authority") or meta.get("domain") or "?"
+
+def _section(meta: dict, text: str) -> str:
+    """Pick a readable section header: explicit metadata.section else first line of text."""
+    sec = (meta.get("section") or "").strip()
+    if not sec:
+        line = (text or "").strip().splitlines()[0:1]
+        return line[0][:200] if line else "General"
+    return sec[:200]
+
+def _format_context_block(doc) -> str:
+    m = getattr(doc, "metadata", {}) or {}
+    header = f"[{_authority(m)}] {_meta_basename(m)} | page {m.get('page','?')} | section: {_section(m, getattr(doc,'page_content',''))}"
+    return header + "\n" + (getattr(doc, "page_content", "") or "").strip()
+
+def _make_citations(docs: List) -> List[str]:
+    out, seen = [], set()
+    for d in docs:
+        m = getattr(d, "metadata", {}) or {}
+        s = f"{_meta_basename(m)} | page {m.get('page','?')} | {_authority(m)}"
+        if s not in seen:
+            out.append(s); seen.add(s)
+    return out
 
 
-# ---- Vector DB ---------------------------------------------------------------
-
-def build_regs_db() -> Chroma:
-    emb = OpenAIEmbeddings(model=EMBED_MODEL)
-    return Chroma(
-        persist_directory=CHROMA_PATH,
-        collection_name=COLLECTION,
-        embedding_function=emb,
-    )
-
-
-# ---- Prompt (escape braces!) -------------------------------------------------
+# ---- Prompt -----------------------------------------------------------------
 
 AUDIT_PROMPT = ChatPromptTemplate.from_template(
-"""You are a regulatory compliance assistant specialized in SDAIA regulations.
-Using only the provided regulation context, assess the user policy chunk. Return **JSON only**:
+    """You are a strict compliance auditor. Use ONLY the provided regulation context to judge the user policy chunk.
+Return a compact JSON object with this exact structure (no extra keys, no commentary):
 
 {{
-  "verdict": "compliant|non-compliant|unclear",
+  "is_compliant": true|false,
   "violations": [
     {{
-      "document": "...",
-      "page": "...",
-      "section": "...",    // MUST be copied from the regulation text below; if unsure use "Not specified"
-      "regulation_citation": "file | page | group",
-      "value": "...",      // the specific policy text that violates the regulation
-      "explanation": "..."
+      "document": "Name of the regulation document in the context",
+      "page": "e.g., 12 or 'Not specified'",
+      "section": "Copy the section/article title or the first heading-like line; otherwise 'Not specified'",
+      "regulation_citation": "filename | page | authority",
+      "value": "Quote the specific policy text that violates the regulation (or summarize succinctly)",
+      "explanation": "One sentence explaining why this violates the cited regulation"
     }}
   ]
 }}
 
 Rules:
 - Use only the regulation context provided.
-- The "section" MUST be copied verbatim from the regulation text below; if unsure use "Not specified".
-- NEVER set "section" to metadata like "Sdaia" or "group".
+- The "section" should be copied from the regulation text when available; otherwise derive a short heading from the first line.
+- If the context is insufficient to assess, set "is_compliant": true and return an empty 'violations' list.
 
 # Regulation context
 {reg_context}
@@ -130,16 +101,18 @@ Rules:
 
 def audit_uploaded_file(path: str, k: int = 4, min_rel: float = 0.35) -> dict:
     """
-    Audits an uploaded policy document against SDAIA regs.
+    Audits an uploaded policy document against the configured regulations.
     Returns a dict with: score, breakdown, violations, citations.
 
     Scoring: 100 * (# compliant chunks) / (# assessed chunks).
-    'unclear' counts as not compliant.
     """
-    db  = build_regs_db()
-    llm = ChatOpenAI(
-        model_name=CHAT_MODEL
+    embeddings = OpenAIEmbeddings(model=EMBED_MODEL)
+    db = Chroma(
+        persist_directory=CHROMA_PATH,
+        collection_name=COLLECTION,
+        embedding_function=embeddings,
     )
+    model = ChatOpenAI(temperature=0, model=CHAT_MODEL)
 
     # 1) Chunk the uploaded file
     chunks = load_and_chunk(path, chunk_size=800, overlap=100)
@@ -151,44 +124,62 @@ def audit_uploaded_file(path: str, k: int = 4, min_rel: float = 0.35) -> dict:
     # 2) For each chunk: retrieve strong regs context -> ask the LLM
     for ch in chunks[:60]:  # cap for speed/safety
         pairs  = db.similarity_search_with_relevance_scores(ch.page_content, k=k)
-        strong = [d for d, s in pairs if (math.ceil(s*20)/20) >= min_rel][:4]
+        # Rounded-up threshold to keep behavior deterministic
+        strong_docs = [d for d, s in pairs if (math.ceil(s*20)/20) >= min_rel][:4]
 
-        if not strong:
+        if not strong_docs:
             unclear += 1
             continue
 
-        reg_context = "\n\n---\n\n".join(
-            f"[{d.metadata.get('source_file','?')} | p.{d.metadata.get('page','?')} | {d.metadata.get('group','?')}]\n{d.page_content}"
-            for d in strong
-        )
-        citations.extend([
-            f"{d.metadata.get('source_file','?')} | page {d.metadata.get('page','?')} | group {d.metadata.get('group','?')}"
-            for d in strong
-        ])
+        reg_context = "\n\n---\n\n".join(_format_context_block(d) for d in strong_docs)
+        citations.extend(_make_citations(strong_docs))
 
         prompt = AUDIT_PROMPT.format(
             reg_context=reg_context,
-            policy_chunk=ch.page_content[:3000]
+            policy_chunk=ch.page_content.strip()[:2000],
         )
-        raw = llm.predict(prompt)
-        data = safe_json(raw)
 
-        v = (data.get("verdict") or "unclear").strip().lower()
-        if v == "compliant":
-            compliant += 1
-        elif v == "non-compliant":
-            non_compliant += 1
-        else:
+        raw = model.predict(prompt)
+        # tolerant JSON parse
+        parsed = None
+        try:
+            start = raw.find("{"); end = raw.rfind("}")
+            if start != -1 and end != -1:
+                parsed = json.loads(raw[start:end+1])
+        except Exception:
+            parsed = None
+
+        if not parsed or not isinstance(parsed, dict):
+            # On parsing failure, mark as unclear to avoid false violations
             unclear += 1
+            continue
 
-        # Post-process each violation (no regex), preserve page fallback
-        for item in data.get("violations", []):
-            item.setdefault("page", ch.metadata.get("page", "Not specified"))
-            fix_section_no_regex(item, strong)
-            violations.append(item)
+        is_ok = bool(parsed.get("is_compliant", False))
+        vlist = parsed.get("violations") or []
+        if is_ok and not vlist:
+            compliant += 1
+        else:
+            non_compliant += 1
+            # Normalize each violation item minimally
+            for v in vlist:
+                docname = v.get("document") or "Regulation context"
+                page    = v.get("page") or "Not specified"
+                sect    = v.get("section") or "Not specified"
+                cite    = v.get("regulation_citation") or ""
+                val     = v.get("value") or ""
+                expl    = v.get("explanation") or ""
+                violations.append({
+                    "document": docname,
+                    "page": page,
+                    "section": sect,
+                    "regulation_citation": cite,
+                    "value": val,
+                    "explanation": expl,
+                })
 
+    # 3) Summaries
     assessed = compliant + non_compliant + unclear
-    score = round(100.0 * compliant / assessed, 2) if assessed else 0.0
+    score = round(100.0 * compliant / assessed, 1) if assessed else 0.0
 
     # dedupe citations, keep order
     citations = list(dict.fromkeys(citations))

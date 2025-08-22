@@ -1,81 +1,84 @@
 # backend/app/chains.py
-
 import os
-import math
+from typing import List, Tuple
+
 from dotenv import load_dotenv
-from langchain_community.vectorstores import Chroma
+from langchain_chroma import Chroma
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
-from langchain.prompts import ChatPromptTemplate
-# 1️⃣ Load 
-#  variables (adjust path if .env lives elsewhere)
+
 load_dotenv()
 
-# 2️⃣ Paths & prompt template
-CHROMA_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "../chroma_db/regs"))
+CHROMA_PATH = os.getenv(
+    "CHROMA_PATH",
+    os.path.abspath(os.path.join(os.path.dirname(__file__), "../chroma_db/regs")),
+)
+CHROMA_COLLECTION = os.getenv("CHROMA_COLLECTION", "ksa_regs")
+EMBED_MODEL = os.getenv("OPENAI_EMBED_MODEL", "text-embedding-3-large")
+CHAT_MODEL = os.getenv("OPENAI_CHAT_MODEL", "gpt-4")
 
-PROMPT_TEMPLATE = """You are a compliance QA assistant. Use ONLY the context to answer.
-If something is not clearly supported by the context, say: "I couldn’t find that in the provided documents."
 
-When you state a fact, append the supporting source header copied verbatim from the context
-after that bullet, in this exact format:
- (source file: '...', page: <n>, group: '...').
+def _format_context(docs_scores: List[Tuple[object, float]]) -> str:
+    blocks = []
+    for doc, _score in docs_scores:
+        meta = doc.metadata or {}
+        header = f"[{meta.get('authority','?')}] {meta.get('file','?')} | page {meta.get('page','?')} | section: {meta.get('section','General')}"
+        blocks.append(header + "\n" + doc.page_content.strip())
+    return "\n\n---\n\n".join(blocks)
 
-Example bullet format (copy the header from the matching context block you used):
- - The controller must do X. (source file: 'SomeLaw.pdf', page: 12, group: 'Sdaia')
 
-Context:
-{context}
+def _citations(docs_scores: List[Tuple[object, float]]) -> List[str]:
+    cites = []
+    for doc, _score in docs_scores:
+        m = doc.metadata or {}
+        cites.append(f"{m.get('file','?')} | page {m.get('page','?')} | authority {m.get('authority','?')}")
+    # dedupe while preserving order
+    seen = set()
+    out: List[str] = []
+    for c in cites:
+        if c not in seen:
+            out.append(c)
+            seen.add(c)
+    return out
 
-Question:
-{question}
 
-Answering rules:
-- Write concise bullet points.
-- Use the exact legal terms and article/section numbers that appear in the context.
-- After each bullet, include one or more source headers you copied from the relevant block(s).
-- Do NOT invent sources, pages, dates, penalties or definitions that aren’t in the context.
-- If the context is insufficient, explicitly say you cannot find it in the provided documents.
-- Do NOT add a References section; citations are inline as shown."""
-
-def make_manual_qa():
+def make_manual_qa(k: int = 4, min_score: float = 0.0):
     """
-    Returns a function run_qa(question: str) -> (answer: str | None, sources: List[str])
-    which:
-      1. Retrieves top-k documents with relevance scores.
-      2. If top score < threshold, returns (None, []).
-      3. Otherwise, builds a context from the docs, prompts GPT-4, and returns its answer + citations.
+    Returns a callable(question:str)->(answer:str|None, citations:List[str])
+    Vector-search over configured Chroma collection, then answer strictly from context.
     """
-    # Initialize embedding function and vector store
-    embedding_fn = OpenAIEmbeddings( model="text-embedding-3-large")
-    db           = Chroma(persist_directory=CHROMA_PATH, embedding_function=OpenAIEmbeddings( model="text-embedding-3-large"))
+    embeddings = OpenAIEmbeddings(model=EMBED_MODEL)
+    vs = Chroma(
+        collection_name=CHROMA_COLLECTION,
+        persist_directory=CHROMA_PATH,
+        embedding_function=embeddings,
+    )
+    llm = ChatOpenAI(model=CHAT_MODEL, temperature=0)
 
-    # Prepare prompt template and LLM
-    prompt_template = ChatPromptTemplate.from_template(PROMPT_TEMPLATE)
-    model           = ChatOpenAI( model_name="gpt-4")
+    def run_qa(question: str):
+        results = vs.similarity_search_with_score(question, k=k)
+        if not results:
+            return None, []
+        # Optional score filter (distance; lower is better). Only apply if your index stores scores comparably.
+        if min_score > 0:
+            filtered = []
+            for d, s in results:
+                try:
+                    if s <= min_score:
+                        filtered.append((d, s))
+                except Exception:
+                    filtered.append((d, s))
+            results = filtered or results
 
-    def run_qa(question: str, k: int = 5, threshold: float = 0.5):
-        # 1) Retrieve top-k docs + their relevance scores
-        results = db.similarity_search_with_relevance_scores(question, k=k)
-
-        # 2) Bail out if no doc is above the threshold
-        if not results or (math.ceil(results[0][1]*20)/20) < threshold:
-             return None, []
-
-        # 3) Build the context string from the retrieved chunks
-        context = "\n\n---\n\n".join(str({'context':doc.page_content,'source file':doc.metadata.get('source_file','?'),'page':doc.metadata.get('page','?'),'group':doc.metadata.get('group','?')}) for doc, _ in results)
-
-        # 4) Format the chat prompt
-        prompt = prompt_template.format(context=context, question=question)
-
-        # 5) Call GPT-4
-        answer = model.predict(prompt)
-
-        # 6) Extract and format citation metadata
-        sources = [
-            f"{doc.metadata.get('source_file','?')} | page {doc.metadata.get('page','?')} | group {doc.metadata.get('group','?')}"
-            for doc, _ in results
-        ]
-
-        return answer, sources
+        context = _format_context(results)
+        system = (
+            "You are a compliance QA assistant. Answer ONLY from the given context. "
+            "Quote exact terms and include section/article numbers when present. "
+            "If the answer is not in the context, reply exactly: \"I don't have enough context to answer.\""
+        )
+        prompt = f"{system}\n\nContext:\n{context}\n\nQuestion:\n{question}\n\nAnswer:"
+        answer = llm.predict(prompt)
+        if "I don't have enough context to answer." in answer:
+            return None, []
+        return answer, _citations(results)
 
     return run_qa

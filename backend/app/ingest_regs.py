@@ -1,33 +1,46 @@
+# backend/app/ingest_regs.py
+"""
+Ingest NCA and SDAIA regulatory docs into a single Chroma collection with rich metadata.
+- Collection: CHROMA_COLLECTION (default: "ksa_regs")
+- Persist dir: CHROMA_PATH (default: backend/chroma_db/regs)
+Each chunk is tagged with: authority (NCA|SDAIA), domain, doc_type, file, page, lang, section.
+Idempotent via stable content-hash IDs (delete-before-add).
+"""
+
 import os
-from pathlib import Path
-from typing import List, Tuple
+import hashlib
+from typing import List, Tuple, Optional
 
 from dotenv import load_dotenv
 from langchain_community.document_loaders import PyPDFLoader, UnstructuredFileLoader, TextLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_openai import OpenAIEmbeddings
 from langchain_chroma import Chroma
+try:
+    from langchain_core.documents import Document
+except Exception:
+    from langchain.docstore.document import Document
 
-# -----------------------------------------------------------------------------
-# Configuration
-# -----------------------------------------------------------------------------
 load_dotenv()
 
-# This file lives under app/, so BASE_DIR points to the backend root.
-BASE_DIR      = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-DATA_DIR      = os.path.join(BASE_DIR, "data", "regs")
-PERSIST_DIR   = os.path.join(BASE_DIR, "chroma_db", "regs")
-COLLECTION    = "langchain"
-EMBED_MODEL   = os.getenv("OPENAI_EMBED_MODEL", "text-embedding-3-large")
-CHUNK_SIZE    = int(os.getenv("CHUNK_SIZE", "500"))
-CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", "100"))
-GROUP_DEFAULT = os.getenv("DOC_GROUP", "Sdaia")
+# Paths
+BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+DATA_DIR = os.path.join(BASE_DIR, "data", "regs")
+NCA_DIR = os.path.join(DATA_DIR, "nca")
+SDAIA_DIR = os.path.join(DATA_DIR, "sdaia")
 
-SUPPORTED_EXTS = {".pdf", ".docx", ".doc", ".txt"}
+# Config (overridable via .env)
+PERSIST_DIR = os.getenv("CHROMA_PATH", os.path.join(BASE_DIR, "chroma_db", "regs"))
+COLLECTION = os.getenv("CHROMA_COLLECTION", "ksa_regs")
+EMBED_MODEL = os.getenv("OPENAI_EMBED_MODEL", "text-embedding-3-large")
+CHUNK_SIZE = int(os.getenv("INGEST_CHUNK_SIZE", "2200"))
+CHUNK_OVERLAP = int(os.getenv("INGEST_CHUNK_OVERLAP", "300"))
+
+ALLOWED_EXTS = {".pdf", ".txt", ".docx", ".doc"}
 
 
 def _loader_for(path: str):
-    ext = Path(path).suffix.lower()
+    ext = os.path.splitext(path)[1].lower()
     if ext == ".pdf":
         return PyPDFLoader(path)
     if ext in {".docx", ".doc"}:
@@ -35,102 +48,153 @@ def _loader_for(path: str):
     return TextLoader(path, encoding="utf-8")
 
 
-def _load_docs_with_len(path: str) -> Tuple[List, int]:
-    loader = _loader_for(path)
-    docs = loader.load()
-    total_len = sum(len(getattr(d, "page_content", "") or "") for d in docs)
-    return docs, total_len
+def _read_text_safely(path: str) -> List[Document]:
+    with open(path, "rb") as f:
+        raw = f.read()
+
+    text = None
+    used = None
+    for enc in ("utf-8", "cp1256", "windows-1252", "latin-1"):
+        try:
+            text = raw.decode(enc)
+            used = enc
+            break
+        except UnicodeDecodeError:
+            continue
+    if text is None:
+        text = raw.decode("utf-8", errors="ignore")
+        used = "utf-8(ignore)"
+
+    return [Document(page_content=text, metadata={"source": path, "encoding": used})]
 
 
-def _split_docs(docs: List):
-    splitter = RecursiveCharacterTextSplitter(
-        chunk_size=CHUNK_SIZE,
-        chunk_overlap=CHUNK_OVERLAP,
-    )
+def _section_from(text: str) -> str:
+    """Cheap first-line-as-section heuristic to aid citations."""
+    text = (text or "").strip()
+    if not text:
+        return "General"
+    head = text.splitlines()[0][:200]
+    keys = ("Article", "Section", "Clause", "Control", "Requirement", "Chapter")
+    if any(k.lower() in head.lower() for k in keys):
+        return head
+    return head if len(head) >= 10 else "General"
+
+
+def _doc_type_from(filename: str) -> str:
+    name = filename.lower()
+    if "standard" in name:
+        return "standard"
+    if "policy" in name:
+        return "policy"
+    if "law" in name:
+        return "law"
+    if "regulation" in name or "regulations" in name or "exec" in name:
+        return "regulation"
+    if "guide" in name or "guideline" in name:
+        return "guide"
+    return "document"
+
+
+def _hash_id(authority: str, filename: str, page: Optional[int], idx: int, content: str) -> str:
+    h = hashlib.sha256()
+    base = f"{authority}|{filename}|{page if page is not None else 'NA'}|{idx}|".encode("utf-8")
+    h.update(base)
+    h.update(content.encode("utf-8"))
+    return h.hexdigest()
+
+
+def _iter_files(root: str) -> List[str]:
+    if not os.path.isdir(root):
+        return []
+    out: List[str] = []
+    for enr, _, files in os.walk(root):
+        for f in files:
+            ext = os.path.splitext(f)[1].lower()
+            if ext in ALLOWED_EXTS:
+                out.append(os.path.join(enr, f))
+    return sorted(out)
+
+
+def _load_and_split(path: str):
+    ext = os.path.splitext(path)[1].lower()
+    if ext == ".txt":
+        docs = _read_text_safely(path)
+    else:
+        loader = _loader_for(path)
+        docs = loader.load()
+    splitter = RecursiveCharacterTextSplitter(chunk_size=CHUNK_SIZE, chunk_overlap=CHUNK_OVERLAP)
     return splitter.split_documents(docs)
 
 
-def _ensure_metadata(chunks: List, src_path: str, group: str):
-    src_base = os.path.basename(src_path)
-    abs_path = os.path.abspath(src_path)
-    for c in chunks:
-        # standardize page info if present
-        c.metadata.setdefault("page", c.metadata.get("page", "N/A"))
-        if "page_label" in c.metadata:
-            c.metadata["page_label"] = c.metadata["page_label"]
-        # add common fields
-        c.metadata["source_file"] = src_base
-        c.metadata["source_path"] = abs_path
-        c.metadata["group"] = group
-
-
-def main() -> None:
-    # Ensure directories exist
-    os.makedirs(DATA_DIR, exist_ok=True)
-    os.makedirs(PERSIST_DIR, exist_ok=True)
-
-    # Embeddings (must match query-time model)
-    embeddings = OpenAIEmbeddings(model=EMBED_MODEL)
-
-    # Persistent Chroma collection
-    db = Chroma(
-        persist_directory=PERSIST_DIR,
-        collection_name=COLLECTION,
-        embedding_function=embeddings,
-    )
-
+def _ingest_folder(vs: Chroma, folder: str, authority: str) -> Tuple[int, int, List[str]]:
+    files = _iter_files(folder)
     total_chunks = 0
     processed_files = 0
     low_text_files: List[str] = []
 
-    # Collect candidate files
-    try:
-        entries = sorted(os.listdir(DATA_DIR))
-    except FileNotFoundError:
-        print(f"[ERR] Data folder not found: {DATA_DIR}")
-        return
-
-    files = [
-        os.path.join(DATA_DIR, f)
-        for f in entries
-        if Path(f).suffix.lower() in SUPPORTED_EXTS
-    ]
-
-    if not files:
-        print(f"[WARN] No input files found in {DATA_DIR} ({', '.join(sorted(SUPPORTED_EXTS))})")
-        return
-
-    # Ingest all files
-    for fullpath in files:
-        if not os.path.exists(fullpath):
-            print(f"[WARN] Skipping missing file: {fullpath}")
+    for fpath in files:
+        filename = os.path.basename(fpath)
+        doc_type = _doc_type_from(filename)
+        docs = _load_and_split(fpath)
+        if not docs:
+            low_text_files.append(filename)
             continue
 
-        docs, total_len = _load_docs_with_len(fullpath)
-        if total_len < 200:
-            low_text_files.append(os.path.basename(fullpath))
-        chunks = _split_docs(docs)
-        _ensure_metadata(chunks, fullpath, GROUP_DEFAULT)
+        metadatas = []
+        ids = []
+        texts = []
+        for i, d in enumerate(docs):
+            page = d.metadata.get("page")
+            section = _section_from(d.page_content)
+            cid = _hash_id(authority, filename, page, i, d.page_content)
+            ids.append(cid)
+            texts.append(d.page_content)
+            metadatas.append(
+                {
+                    "authority": authority,
+                    "domain": "database_security" if authority == "NCA" else "privacy",
+                    "doc_type": doc_type,
+                    "file": filename,
+                    "page": page,
+                    "lang": "en",
+                    "section": section,
+                }
+            )
 
-        if chunks:
-            db.add_documents(chunks)
-            added = len(chunks)
-            total_chunks += added
+        try:
+            if ids:
+                vs.delete(ids=ids)
+        except Exception:
+            pass
+
+        if texts:
+            vs.add_texts(texts=texts, metadatas=metadatas, ids=ids)
+            total_chunks += len(texts)
             processed_files += 1
-            print(f"[+] {os.path.basename(fullpath)} → {added} chunks")
-        else:
-            print(f"[WARN] No chunks produced for {os.path.basename(fullpath)}")
 
-    # Persist and summarize
-    try:
-        db.persist()
-    except Exception:
-        # Some versions persist automatically; ignore if not supported.
-        pass
+    return processed_files, total_chunks, low_text_files
+
+
+def main():
+    os.makedirs(PERSIST_DIR, exist_ok=True)
+    embeddings = OpenAIEmbeddings(model=EMBED_MODEL)
+    vectorstore = Chroma(
+        collection_name=COLLECTION,
+        persist_directory=PERSIST_DIR,
+        embedding_function=embeddings,
+    )
+
+    print("── Ingesting NCA ─────────────────────────────────")
+    n_files, n_chunks, n_low = _ingest_folder(vectorstore, NCA_DIR, "NCA")
+    print(f"  Files: {n_files} | Chunks: {n_chunks}")
+
+    print("── Ingesting SDAIA ───────────────────────────────")
+    s_files, s_chunks, s_low = _ingest_folder(vectorstore, SDAIA_DIR, "SDAIA")
+    print(f"  Files: {s_files} | Chunks: {s_chunks}")
+
+    low_text_files = [*n_low, *s_low]
 
     print("\n── Ingestion complete ─────────────────────────────")
-    print(f" Files processed : {processed_files}")
-    print(f" Chunks added    : {total_chunks}")
     print(f" Persist dir     : {PERSIST_DIR}")
     print(f" Collection      : {COLLECTION}")
     print(f" Embed model     : {EMBED_MODEL}")
@@ -138,6 +202,11 @@ def main() -> None:
         print(" [NOTE] These files had very little text and may require OCR:")
         for f in low_text_files:
             print(f"   - {f}")
+
+    try:
+        vectorstore.persist()
+    except Exception:
+        pass
 
 
 if __name__ == "__main__":
