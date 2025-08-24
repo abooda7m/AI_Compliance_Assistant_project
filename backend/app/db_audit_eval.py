@@ -17,7 +17,7 @@ CHROMA_PATH = os.getenv(
 CHROMA_COLLECTION = os.getenv("CHROMA_COLLECTION", "ksa_regs")
 
 # Optional envs for parity with project
-EMBED_MODEL = os.getenv("OPENAI_EMBED_MODEL", "text-embedding-3-large")
+EMBED_MODEL = os.getenv("OPENAI_EMBED_MODEL", "text-embedding-3-large")  # 3072 dim
 CHAT_MODEL = os.getenv("OPENAI_CHAT_MODEL", os.getenv("CHAT_MODEL", "gpt-4o"))
 LLM_MODEL = os.getenv("LLM_MODEL", CHAT_MODEL)
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
@@ -25,38 +25,121 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 # ----------------- Retrieval (single collection, NCA-only) -----------------
 
-def _retrieve_nca_excerpts(topic: str, top_k: int = 3) -> List[str]:
+def _retrieve_nca_excerpts(topic: str, top_k: int = 5) -> List[str]:
     """
-    Query the single Chroma collection, hard-filtered to authority='NCA'.
-    Return lightweight citations like '<title>:<page>:NCA'.
+    Query the Chroma collection and build citations STRICTLY from metadata.
+    Format: "<title>:<page>:<authority>".
+    - No hardcoded fallbacks.
+    - Accepts authority under 'authority' or 'group' (per your ingester).
+    - Accepts page under 'page', 'pageno', or 'page_label'.
+    - Accepts title under 'title', 'source', or 'source_file'.
+
+    Raises RuntimeError if collection is missing/empty or results lack usable metadata.
     """
+    # 0) Import Chroma client + embedding function
     try:
         from chromadb import PersistentClient  # type: ignore
+        from chromadb.utils.embedding_functions import OpenAIEmbeddingFunction  # type: ignore
+    except Exception as e:
+        raise RuntimeError(
+            "NCA citation retrieval requires 'chromadb' and its embedding_functions. "
+            f"Import failed: {type(e).__name__}: {e}"
+        )
+
+    if not OPENAI_API_KEY:
+        raise RuntimeError(
+            "OPENAI_API_KEY is not set. Your collection was created with an OpenAI "
+            f"embedding ({EMBED_MODEL}); querying requires the same embedding to avoid "
+            "dimension mismatch errors."
+        )
+
+    # 1) Build embedding function to match ingestion (e.g., text-embedding-3-large => 3072)
+    try:
+        embedding_fn = OpenAIEmbeddingFunction(
+            api_key=OPENAI_API_KEY,
+            model_name=EMBED_MODEL,
+        )
+    except Exception as e:
+        raise RuntimeError(
+            f"Failed to initialize OpenAIEmbeddingFunction for '{EMBED_MODEL}': {type(e).__name__}: {e}"
+        )
+
+    # 2) Open collection with matching embedding function
+    try:
         client = PersistentClient(path=CHROMA_PATH)
-        col = client.get_or_create_collection(CHROMA_COLLECTION)
-        res = col.query(
+        col = client.get_or_create_collection(
+            CHROMA_COLLECTION, embedding_function=embedding_fn  # type: ignore[call-arg]
+        )
+        if hasattr(col, "count") and callable(col.count) and col.count() == 0:
+            raise RuntimeError(
+                f"Chroma collection '{CHROMA_COLLECTION}' at '{CHROMA_PATH}' is empty. "
+                "Ingest NCA PDFs with metadata (authority/group + title/source_file + page/page_label) first."
+            )
+    except Exception as e:
+        raise RuntimeError(
+            f"Cannot open Chroma collection '{CHROMA_COLLECTION}' at '{CHROMA_PATH}': {type(e).__name__}: {e}"
+        )
+
+    # 3) Query strictly for NCA authority; prefer 'authority', then fall back to 'group'
+    def _query(where: Dict[str, Any]) -> Dict[str, Any]:
+        return col.query(  # type: ignore[call-arg]
             query_texts=[topic],
             n_results=top_k,
-            where={"authority": "NCA"},
+            where=where,
+        ) or {}
+
+    try:
+        res = _query({"authority": "NCA"})
+        metas = (res.get("metadatas") or [[]])[0]
+        if not metas:
+            # retry with 'group' == 'NCA' (your ingester uses this field)
+            res = _query({"group": "NCA"})
+            metas = (res.get("metadatas") or [[]])[0]
+        if not metas:
+            # last resort: query without where, then post-filter by authority/group == NCA
+            res = _query({})
+            metas = (res.get("metadatas") or [[]])[0]
+    except Exception as e:
+        raise RuntimeError(
+            f"NCA retrieval failed for topic '{topic}' against collection "
+            f"'{CHROMA_COLLECTION}' at '{CHROMA_PATH}': {type(e).__name__}: {e}"
         )
-        docs = res.get("documents") or [[]]
-        metas = res.get("metadatas") or [[]]
-        out: List[str] = []
-        for _, meta in zip(docs[0], metas[0]):
-            title = (meta or {}).get("title") or (meta or {}).get("source") or "NCA"
-            page = (meta or {}).get("page") or (meta or {}).get("pageno") or ""
-            authority = (meta or {}).get("authority") or "NCA"
-            out.append(f"{title}:{page}:{authority}")
-        if out:
-            return out
-    except Exception:
-        pass
-    # Minimal safe fallback to uploaded NCA PDFs (still NCA-only)
-    return [
-        "STANDARD_Database_Security_template_en-.pdf:1:NCA",
-        "STANDARD_Database_Security_template_en-.pdf:7:NCA",
-        "POLICY_Database_Security_template_en-.pdf:5:NCA",
-    ]
+
+    if not metas:
+        raise RuntimeError(
+            f"NCA retrieval returned no results for topic '{topic}'. "
+            "Ensure the collection contains NCA docs with metadata."
+        )
+
+    # 4) Build citations ONLY from metadata, enforcing NCA via 'authority' or 'group'
+    out: List[str] = []
+    for meta in metas:
+        m = meta or {}
+        # Determine authority tag
+        authority = m.get("authority") or m.get("group")  # your ingester sets 'group' = authority
+        if authority != "NCA":
+            continue  # skip non-NCA
+        # Determine title/source
+        title = m.get("title") or m.get("source") or m.get("source_file")
+        # Determine page label
+        page = m.get("page")
+        if page is None:
+            page = m.get("pageno")
+        if page is None:
+            page = m.get("page_label")
+        # Accept string/int pages; reject missing
+        if not title or page is None:
+            continue
+        out.append(f"{title}:{page}:{authority}")
+
+    if not out:
+        raise RuntimeError(
+            "NCA retrieval returned results, but none had usable metadata. "
+            "Expected at least: ('authority'=='NCA' or 'group'=='NCA'), and a title "
+            "('title' or 'source' or 'source_file'), and a page ('page' or 'pageno' or 'page_label')."
+        )
+
+    return out
 
 
 # ----------------- LLM utilities -----------------
@@ -141,7 +224,7 @@ from app.db_collector import collect_db_facts
 def evaluate_db_against_nca(facts: DBFacts) -> List[DBCheckResult]:
     """
     LLM-only evaluation. If the LLM is unavailable or returns invalid JSON, we raise.
-    No hardcoded verdicts/remediations are produced here.
+    No hardcoded verdicts/remediations/citations are produced here.
     """
     mode, client = _get_openai_client()
     messages = _build_llm_prompt(facts)
@@ -166,7 +249,7 @@ def evaluate_db_against_nca(facts: DBFacts) -> List[DBCheckResult]:
     return _parse_llm_json(text)
 
 
-def run_db_audit(*, dsn: str) -> list[DBCheckResult]:
+def run_db_audit(*, dsn: str) -> List[DBCheckResult]:
     """
     Collect facts -> LLM evaluation (NCA-only retrieval for citations) -> results.
     DSN is REQUIRED (per-request); there is no .env fallback.
