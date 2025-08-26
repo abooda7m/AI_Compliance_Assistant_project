@@ -14,21 +14,20 @@ from app.utils_files import load_and_chunk  # existing chunker
 
 # ---- Configuration -----------------------------------------------------------
 
-EMBED_MODEL   = os.getenv("OPENAI_EMBED_MODEL", "text-embedding-3-large")
-CHAT_MODEL    = os.getenv("OPENAI_CHAT_MODEL",  "gpt-5-nano")  # safe default
-BASE_DIR      = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-CHROMA_PATH   = os.getenv("CHROMA_PATH", os.path.join(BASE_DIR, "chroma_db", "regs"))
-COLLECTION    = os.getenv("CHROMA_COLLECTION", "ksa_regs")     # unified collection
+EMBED_MODEL = os.getenv("OPENAI_EMBED_MODEL", "text-embedding-3-large")
+CHAT_MODEL  = os.getenv("OPENAI_CHAT_MODEL",  "gpt-5-nano")  # safe default
+BASE_DIR    = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+CHROMA_PATH = os.getenv("CHROMA_PATH", os.path.join(BASE_DIR, "chroma_db", "regs"))
+COLLECTION  = os.getenv("CHROMA_COLLECTION", "ksa_regs")  # unified collection
+
 
 # ---- Metadata helpers --------------------------------------------------------
 
 def _meta_basename(meta: dict) -> str:
-    """
-    Prefer our 'file' metadata from ingestion; fall back to basename of 'source'.
-    """
+    """Prefer 'file' then basename(source) then '?'."""
     if meta.get("file"):
         return meta["file"]
-    src = meta.get("source")
+    src = meta.get("source") or meta.get("source_file")
     if src:
         try:
             import os as _os
@@ -37,22 +36,50 @@ def _meta_basename(meta: dict) -> str:
             return src
     return "?"
 
+
 def _authority(meta: dict) -> str:
-    """Return authority (NCA/SDAIA) when present; fall back to 'domain'."""
-    return meta.get("authority") or meta.get("domain") or "?"
+    """Return authority when present, else group or domain, else '?'."""
+    return meta.get("authority") or meta.get("group") or meta.get("domain") or "?"
+
+
+def _section_from_text(text: str) -> str:
+    """
+    Lightweight heading pick, no regex.
+    Prefer a line starting with Article, Section, Clause. Else first non-empty line.
+    """
+    text = text or ""
+    for key in ("Article", "Section", "Clause"):
+        pos = text.find(key)
+        if pos != -1:
+            line = text[pos:].splitlines()[0].strip()
+            return (line[:140] + "…") if len(line) > 140 else line
+    for line in text.splitlines():
+        line = line.strip()
+        if line:
+            return (line[:140] + "…") if len(line) > 140 else line
+    return "Not specified"
+
 
 def _section(meta: dict, text: str) -> str:
-    """Pick a readable section header: explicit metadata.section else first line of text."""
+    """Prefer metadata.section else derive from text."""
     sec = (meta.get("section") or "").strip()
     if not sec:
-        line = (text or "").strip().splitlines()[0:1]
-        return line[0][:200] if line else "General"
+        return _section_from_text(text)
     return sec[:200]
+
+
+def _ctx_header(meta: dict, text: str) -> str:
+    """
+    Unified context header. Copyable into answers and used for inline citation.
+    Example: [SDAIA] Law.pdf | page 12 | section: Article 5 X
+    """
+    return f"[{_authority(meta)}] {_meta_basename(meta)} | page {meta.get('page','?')} | section: {_section(meta, text)}"
+
 
 def _format_context_block(doc) -> str:
     m = getattr(doc, "metadata", {}) or {}
-    header = f"[{_authority(m)}] {_meta_basename(m)} | page {m.get('page','?')} | section: {_section(m, getattr(doc,'page_content',''))}"
-    return header + "\n" + (getattr(doc, "page_content", "") or "").strip()
+    return _ctx_header(m, getattr(doc, "page_content", "") or "") + "\n" + (getattr(doc, "page_content", "") or "").strip()
+
 
 def _make_citations(docs: List) -> List[str]:
     out, seen = [], set()
@@ -60,7 +87,8 @@ def _make_citations(docs: List) -> List[str]:
         m = getattr(d, "metadata", {}) or {}
         s = f"{_meta_basename(m)} | page {m.get('page','?')} | {_authority(m)}"
         if s not in seen:
-            out.append(s); seen.add(s)
+            out.append(s)
+            seen.add(s)
     return out
 
 
@@ -97,35 +125,85 @@ Rules:
 """
 )
 
+
+# ---- JSON parsing and section fix -------------------------------------------
+
+def safe_json(text: str) -> dict:
+    """Parse model output robustly. Try direct loads, else first {...} block."""
+    try:
+        return json.loads(text)
+    except Exception:
+        pass
+    start = text.find("{")
+    end = text.rfind("}")
+    if start != -1 and end != -1 and end > start:
+        try:
+            return json.loads(text[start:end + 1])
+        except Exception:
+            pass
+    return {"verdict": "unclear", "violations": []}
+
+
+def fix_section_no_regex(item: dict, context_docs: List) -> None:
+    """
+    Ensure 'section' is a sensible title from regulation context, no regex.
+    Replace empty or metadata-like values. If claimed section not found in any
+    context doc, derive from the first context doc.
+    """
+    if not context_docs:
+        item["section"] = item.get("section") or "Not specified"
+        return
+    sec = (item.get("section") or "").strip()
+    bad_vals = {"sdaia", "group", "n/a", "na"}
+    if not sec or sec.lower() in bad_vals:
+        item["section"] = _section_from_text(context_docs[0].page_content)
+        return
+    if not any(sec in d.page_content for d in context_docs):
+        item["section"] = _section_from_text(context_docs[0].page_content)
+
+
+# ---- Vector DB ---------------------------------------------------------------
+
+def build_regs_db() -> Chroma:
+    emb = OpenAIEmbeddings(model=EMBED_MODEL)
+    return Chroma(
+        persist_directory=CHROMA_PATH,
+        collection_name=COLLECTION,
+        embedding_function=emb,
+    )
+
+
 # ---- Main entry --------------------------------------------------------------
 
 def audit_uploaded_file(path: str, k: int = 4, min_rel: float = 0.35) -> dict:
     """
-    Audits an uploaded policy document against the configured regulations.
-    Returns a dict with: score, breakdown, violations, citations.
+    Audit an uploaded policy document against the configured regulations.
 
-    Scoring: 100 * (# compliant chunks) / (# assessed chunks).
+    Returns:
+      {
+        "score": float,
+        "breakdown": {assessed, compliant, non_compliant, unclear},
+        "violations": List[dict],
+        "citations": List[str]
+      }
+
+    Scoring:
+      score = 100 * compliant / assessed
     """
-    embeddings = OpenAIEmbeddings(model=EMBED_MODEL)
-    db = Chroma(
-        persist_directory=CHROMA_PATH,
-        collection_name=COLLECTION,
-        embedding_function=embeddings,
-    )
-    model = ChatOpenAI(temperature=0, model=CHAT_MODEL)
+    db = build_regs_db()
+    llm = ChatOpenAI(temperature=0, model=CHAT_MODEL)
 
     # 1) Chunk the uploaded file
     chunks = load_and_chunk(path, chunk_size=800, overlap=100)
 
     violations: List[dict] = []
-    citations:  List[str]  = []
+    citations: List[str] = []
     compliant = non_compliant = unclear = 0
 
-    # 2) For each chunk: retrieve strong regs context -> ask the LLM
-    for ch in chunks[:60]:  # cap for speed/safety
-        pairs  = db.similarity_search_with_relevance_scores(ch.page_content, k=k)
-        # Rounded-up threshold to keep behavior deterministic
-        strong_docs = [d for d, s in pairs if (math.ceil(s*20)/20) >= min_rel][:4]
+    # 2) For each chunk, retrieve strong regs context then ask the LLM
+    for ch in chunks[:60]:  # cap for speed and cost
+        pairs = db.similarity_search_with_relevance_scores(ch.page_content, k=k)
+        strong_docs = [d for d, s in pairs if (math.ceil(s * 20) / 20) >= min_rel][:4]
 
         if not strong_docs:
             unclear += 1
@@ -139,47 +217,59 @@ def audit_uploaded_file(path: str, k: int = 4, min_rel: float = 0.35) -> dict:
             policy_chunk=ch.page_content.strip()[:2000],
         )
 
-        raw = model.predict(prompt)
-        # tolerant JSON parse
-        parsed = None
-        try:
-            start = raw.find("{"); end = raw.rfind("}")
-            if start != -1 and end != -1:
-                parsed = json.loads(raw[start:end+1])
-        except Exception:
-            parsed = None
+        raw = llm.predict(prompt)
+        parsed = safe_json(raw)
 
-        if not parsed or not isinstance(parsed, dict):
-            # On parsing failure, mark as unclear to avoid false violations
-            unclear += 1
-            continue
-
-        is_ok = bool(parsed.get("is_compliant", False))
-        vlist = parsed.get("violations") or []
-        if is_ok and not vlist:
-            compliant += 1
+        # Normalize into the unified outcome
+        # If model followed this file's schema:
+        if "is_compliant" in parsed:
+            is_ok = bool(parsed.get("is_compliant", False))
+            vlist = parsed.get("violations") or []
+            if is_ok and not vlist:
+                compliant += 1
+            else:
+                non_compliant += 1
+                # Normalize and patch each violation
+                for v in vlist:
+                    docname = v.get("document") or _meta_basename(getattr(strong_docs[0], "metadata", {}) or {})
+                    page    = v.get("page") or "Not specified"
+                    sect    = v.get("section") or "Not specified"
+                    cite    = v.get("regulation_citation") or ""
+                    val     = v.get("value") or ""
+                    expl    = v.get("explanation") or ""
+                    item = {
+                        "document": docname,
+                        "page": page,
+                        "section": sect,
+                        "regulation_citation": cite,
+                        "value": val,
+                        "explanation": expl,
+                    }
+                    fix_section_no_regex(item, strong_docs)
+                    violations.append(item)
         else:
-            non_compliant += 1
-            # Normalize each violation item minimally
-            for v in vlist:
-                docname = v.get("document") or "Regulation context"
-                page    = v.get("page") or "Not specified"
-                sect    = v.get("section") or "Not specified"
-                cite    = v.get("regulation_citation") or ""
-                val     = v.get("value") or ""
-                expl    = v.get("explanation") or ""
-                violations.append({
-                    "document": docname,
-                    "page": page,
-                    "section": sect,
-                    "regulation_citation": cite,
-                    "value": val,
-                    "explanation": expl,
-                })
+            # If model followed the alternate schema with "verdict"
+            verdict = (parsed.get("verdict") or "unclear").strip().lower()
+            if verdict == "compliant":
+                compliant += 1
+            elif verdict == "non-compliant":
+                non_compliant += 1
+            else:
+                unclear += 1
+
+            for item in parsed.get("violations", []):
+                item.setdefault("document", _meta_basename(getattr(strong_docs[0], "metadata", {}) or {}))
+                item.setdefault("page", "Not specified")
+                item.setdefault("section", "Not specified")
+                item.setdefault("regulation_citation", "")
+                item.setdefault("value", "")
+                item.setdefault("explanation", "")
+                fix_section_no_regex(item, strong_docs)
+                violations.append(item)
 
     # 3) Summaries
     assessed = compliant + non_compliant + unclear
-    score = round(100.0 * compliant / assessed, 1) if assessed else 0.0
+    score = round(100.0 * compliant / assessed, 2) if assessed else 0.0
 
     # dedupe citations, keep order
     citations = list(dict.fromkeys(citations))
