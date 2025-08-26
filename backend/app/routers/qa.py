@@ -1,10 +1,9 @@
-# # backend/app/routers/qa.py
-
 from fastapi import APIRouter, HTTPException
 from app.models import QARequest, QAResponse
 from app.chains import make_manual_qa
 
-router = APIRouter()
+router = APIRouter(tags=["qa"])
+
 run_qa = make_manual_qa()
 
 @router.post("/qa", response_model=QAResponse)

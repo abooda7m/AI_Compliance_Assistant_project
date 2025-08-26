@@ -16,6 +16,7 @@ from app.schemas.policies import (
 from app.policies_planner import plan_policies_rule_based
 from app.regs_retrieval import fetch_clauses
 from app.policies_composer import compose_policy_text
+from app.persist import persist_policy_plan, persist_policy_doc
 
 router = APIRouter(tags=["regs-policies"])
 DEFAULT_CHAT_MODEL = "gpt-4"
@@ -49,6 +50,7 @@ TOPIC_TERMS_BY_POLICY = {
 def policies_plan(payload: PolicyPlanRequest) -> PolicyPlanResponse:
     if not payload.facts.company_name.strip():
         raise HTTPException(status_code=400, detail="company_name is required in facts.")
+
     plan: PolicyPlan = plan_policies_rule_based(
         facts=payload.facts,
         language=payload.language,
@@ -56,6 +58,13 @@ def policies_plan(payload: PolicyPlanRequest) -> PolicyPlanResponse:
         include_only=payload.include_only,
         exclude=payload.exclude,
     )
+
+    # Persist plan (best-effort; response remains the same)
+    try:
+        persist_policy_plan(company_name=payload.facts.company_name, facts=payload.facts, plan=plan)
+    except Exception as e:
+        print("persist_policy_plan (plan only) failed:", e)
+
     return PolicyPlanResponse(company_name=payload.facts.company_name, plan=plan)
 
 @router.post("/regs/policies/plan-compose", response_model=PolicyPlanComposeResponse)
@@ -71,11 +80,17 @@ def plan_and_compose(payload: PolicyPlanComposeRequest) -> PolicyPlanComposeResp
         exclude=payload.exclude,
     )
 
+    # Save the plan first; use plan_id for child docs
+    plan_id = None
+    try:
+        plan_id = persist_policy_plan(company_name=payload.facts.company_name, facts=payload.facts, plan=plan)
+    except Exception as e:
+        print("persist_policy_plan (compose) failed:", e)
+
     out_docs: List[PolicyDoc] = []
     for item in plan.items:
         topic_terms = TOPIC_TERMS_BY_POLICY.get(item.policy_id, [])
 
-        # First try: strict threshold to drop distant hits
         pulled = fetch_clauses(
             query=item.search_query,
             k=item.k,
@@ -83,12 +98,11 @@ def plan_and_compose(payload: PolicyPlanComposeRequest) -> PolicyPlanComposeResp
             facts=payload.facts,
             topic_terms=topic_terms,
             rerank_top=item.k,
-            min_score=1.0,  # ⬅ drop very distant hits (>=1 match)
+            min_score=1.0,
         )
         excerpts = pulled.get("docs", []) or []
         citations = pulled.get("citations", []) or []
 
-        # Broaden once if nothing: relax threshold but keep rerank
         if not excerpts:
             alt_query = (item.title or "").split("(")[0].strip() or item.policy_id.replace("_", " ")
             pulled = fetch_clauses(
@@ -99,7 +113,7 @@ def plan_and_compose(payload: PolicyPlanComposeRequest) -> PolicyPlanComposeResp
                 facts=payload.facts,
                 topic_terms=topic_terms,
                 rerank_top=item.k,
-                min_score=None,  # ⬅ no drop; let composer filter by normativity/citations
+                min_score=None,
             )
             excerpts = pulled.get("docs", []) or []
             citations = pulled.get("citations", []) or []
@@ -121,6 +135,20 @@ def plan_and_compose(payload: PolicyPlanComposeRequest) -> PolicyPlanComposeResp
         )
         if not content.strip():
             continue
+
+        # Persist the composed doc (best-effort)
+        try:
+            persist_policy_doc(
+                plan_id=plan_id,
+                policy_id=item.policy_id,
+                title=title,
+                filename=filename,
+                content=content,
+                citations=citations,
+                used_clause_texts=[e for e in excerpts if e and e.strip()],
+            )
+        except Exception as e:
+            print("persist_policy_doc failed:", e)
 
         out_docs.append(PolicyDoc(
             policy_id=item.policy_id,
