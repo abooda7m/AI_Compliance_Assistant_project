@@ -1,3 +1,4 @@
+# app/routers/db_audit.py
 # path: backend/app/routers/db_audit.py
 from __future__ import annotations
 
@@ -6,10 +7,9 @@ from typing import List, Optional
 from fastapi import APIRouter, HTTPException, Query
 
 from app.schemas.db import DBFacts
-from app.schemas.db_audit import DBCheckResult
+from app.schemas.db_audit import DBCheckResult, DBAuditReport  # <-- ADDED DBAuditReport
 from app.db_audit_eval import run_db_audit
 from app.db_collector import collect_db_facts
-
 router = APIRouter()
 
 
@@ -49,7 +49,7 @@ def db_facts(
     return collect_db_facts(dsn_effective)
 
 
-@router.get("/db/audit", response_model=List[DBCheckResult], tags=["db-compliance"])
+@router.get("/db/audit", response_model=DBAuditReport, tags=["db-compliance"])  # <-- CHANGED response_model
 def db_audit(
     authority: Optional[str] = Query(default="NCA", description="Must be NCA for DB audits"),
     dsn: Optional[str] = Query(
@@ -73,4 +73,5 @@ def db_audit(
         raise HTTPException(status_code=400, detail="DB audits are restricted to NCA.")
 
     dsn_effective = _resolve_dsn(dsn, dsn_base64)
-    return run_db_audit(dsn=dsn_effective)
+    checks, summary = run_db_audit(dsn=dsn_effective)  # returns (checks, summary)
+    return DBAuditReport(checks=checks, summary=summary)

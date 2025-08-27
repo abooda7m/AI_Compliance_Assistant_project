@@ -1,3 +1,4 @@
+# app/schemas/db_audit.py
 from __future__ import annotations
 
 from typing import List, Optional, Literal, Dict, Any
@@ -22,3 +23,9 @@ class DBCheckResult(BaseModel):
 
     # Optional label for convenience (e.g., "TLS in transit", "Password hashing")
     topic: Optional[str] = None
+
+
+# --- ADDED: report wrapper for (checks, summary) ---
+class DBAuditReport(BaseModel):
+    checks: List[DBCheckResult]
+    summary: str
