@@ -1,0 +1,265 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ===== Base ===== */
+:root { color-scheme: light dark; }
+
+@layer base {
+  html, body, #root { @apply bg-white text-neutral-900 dark:bg-neutral-950 dark:text-neutral-100; }
+
+  h1, h2, h3 { @apply text-neutral-900 dark:text-white; }
+  p         { @apply text-neutral-700 dark:text-neutral-300; }
+
+  /* مسارات الخطوط: عربي/لاتيني */
+  html[lang='ar'] body {
+    font-family: "Tajawal","IBM Plex Sans Arabic",system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;
+  }
+  html[lang='en'] body {
+    font-family: ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;
+  }
+}
+
+/* حاوية قصوى موحّدة */
+.container-max { @apply mx-auto max-w-7xl px-4 sm:px-6 lg:px-8; }
+
+input::placeholder, textarea::placeholder { @apply text-neutral-400 dark:text-neutral-500; }
+
+/* ===== Fonts (utils) ===== */
+.font-ar {
+  font-family: "Tajawal","IBM Plex Sans Arabic",system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;
+}
+.font-latin {
+  font-family: ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif !important;
+}
+html[lang='ar'] .font-sans {
+  font-family: "Tajawal","IBM Plex Sans Arabic",system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif !important;
+}
+
+/* ===== Brand (gradient word + round mark) ===== */
+:root {
+  --muhkam-c1:#3b82f6; /* indigo-500 */
+  --muhkam-c2:#22d3ee; /* cyan-400   */
+  --muhkam-c3:#34d399; /* emerald-400*/
+}
+.muhkam-word{
+  font-family:"Tajawal","IBM Plex Sans Arabic",system-ui,Segoe UI,Arial,sans-serif;
+  font-weight:700; letter-spacing:.5px; line-height:1; display:inline-block;
+  background:linear-gradient(90deg,var(--muhkam-c1),var(--muhkam-c2) 50%,var(--muhkam-c3));
+  -webkit-background-clip:text; background-clip:text; color:transparent;
+}
+.muhkam-word.sm{font-size:18px;} .muhkam-word.lg{font-size:24px;}
+
+.muhkam-mark{
+  inline-size:36px; block-size:36px; border-radius:9999px;
+  background:
+    radial-gradient(100% 100% at 30% 20%,rgba(255,255,255,.18) 0,rgba(255,255,255,0) 60%),
+    linear-gradient(135deg,rgba(59,130,246,.25),rgba(34,211,238,.18));
+  border:1px solid rgba(255,255,255,.10);
+  backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px);
+  display:inline-flex; align-items:center; justify-content:center;
+  box-shadow:0 8px 24px rgba(0,0,0,.35);
+}
+.muhkam-mark__glyph{ font-family:"Tajawal","IBM Plex Sans Arabic",system-ui,Segoe UI,Arial,sans-serif; font-weight:700; font-size:18px; color:#eaf8ff; transform:translateY(-1px); }
+.muhkam-brand:hover .muhkam-mark{ box-shadow:0 10px 28px rgba(34,211,238,.25); }
+
+/* قفل ترتيب شعار MUHKAM: العربي يمين والإنجليزي يسار */
+.brand-lock { @apply flex-row-reverse; }
+
+/* ===== Hero buttons / badge ===== */
+@layer components {
+  .btn-hero{
+    @apply inline-flex items-center justify-center select-none
+           h-12 px-8 rounded-2xl text-lg font-semibold transition shadow-lg;
+  }
+  .btn-primary{ @apply text-white bg-indigo-600 hover:bg-indigo-600/90; }
+  .btn-secondary{
+    @apply bg-black/5 text-neutral-800 ring-1 ring-black/10 rounded-2xl px-8 h-12
+           hover:bg-black/10 hover:text-neutral-900 hover:ring-indigo-500/50
+           hover:shadow-[0_0_40px_rgba(67,56,202,.45)];
+  }
+  .dark .btn-secondary{
+    @apply bg-white/10 text-white ring-1 ring-white/20 hover:bg-white/15 hover:ring-indigo-400/50
+           hover:shadow-[0_0_40px_rgba(67,56,202,.45)];
+  }
+
+  /* شارة الهيرو (حب السعودية) كـ Chip دائرية */
+  .badge-pill{
+    @apply inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm
+           bg-white/10 text-white ring-1 ring-white/15 shadow;
+  }
+  .dark .badge-pill{ @apply bg-white/10 text-white; }
+  .badge{ @apply inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs md:text-sm border bg-black/5 border-black/10 text-neutral-800; }
+  .dark .badge{ @apply bg-white/10 border-white/20 text-white; }
+}
+
+/* ===== Inputs ===== */
+@layer components {
+  .input{
+    @apply w-full rounded-xl px-4 h-11 text-sm outline-none transition
+           bg-white text-neutral-900 ring-1 ring-black/10 placeholder-neutral-400;
+  }
+  .input:focus{ @apply ring-2 ring-indigo-500/40; }
+  .dark .input{ @apply bg-neutral-950 text-neutral-100 ring-white/10 placeholder-neutral-500; }
+  .input-lg{ @apply h-12 text-base; }
+
+  .btn-form{
+    @apply w-full h-12 rounded-xl font-semibold text-white bg-indigo-600 hover:bg-indigo-600/90
+           transition shadow-lg hover:shadow-[0_8px_26px_rgba(79,70,229,.35)]
+           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50
+           disabled:opacity-60 disabled:cursor-not-allowed;
+  }
+}
+
+/* ===== Sidebar (theme-aware + smooth hover) ===== */
+@layer components {
+  .sidebar{
+    @apply fixed inset-y-0 left-0 z-40 w-64 flex flex-col
+           bg-white text-neutral-900 border-r border-black/10
+           dark:bg-neutral-950 dark:text-neutral-100 dark:border-white/10
+           transform transition-transform duration-300 ease-in-out;
+  }
+  .sidebar-header{ @apply h-14 flex items-center gap-2 px-4 border-b border-black/10 dark:border-white/10; }
+  .sidebar-nav{ @apply p-3 space-y-1 flex-1; }
+  .sidebar-link{
+    @apply flex items-center gap-2 rounded-md px-3 py-2 text-sm transition
+           text-neutral-700 hover:bg-black/5 dark:text-neutral-300 dark:hover:bg-white/5;
+  }
+  .sidebar-link.active{
+    @apply bg-black/5 text-neutral-900 dark:bg-white/10 dark:text-white font-medium;
+  }
+}
+
+/* ===== Section headers & spacing ===== */
+@layer components {
+  .section{ @apply container-max py-12 md:py-16; }
+
+  /* أكبر وواضحة */
+  .section-title{
+    @apply text-4xl md:text-5xl font-extrabold tracking-tight text-center;
+  }
+  .section-subtitle{
+    @apply mt-2 text-lg md:text-xl text-neutral-600 dark:text-white/70
+           max-w-3xl mx-auto text-center;
+  }
+
+  /* خط العنوان المتوهّج أعلى “Why Muhkam?” */
+  .hr-heading{
+    @apply mx-auto h-[3px] w-10/12 md:w-7/12 lg:w-[560px]
+           rounded-full bg-indigo-600/90 shadow-[0_0_14px_rgba(67,56,202,0.35)]
+           mb-6;
+  }
+}
+
+/* ===== Tiles / Cards (UNIFIED) ===== */
+@layer components {
+  .tile{
+    @apply rounded-2xl p-6 bg-white text-neutral-900 border border-black/10 shadow-sm;
+  }
+  .dark .tile{ @apply bg-neutral-900/70 text-neutral-100 border-white/10; }
+
+  /* حجم موحّد للكروت في الشبكات */
+  .tile-lg{ @apply p-6 md:p-7; }
+  .tile-eq{ @apply flex flex-col justify-start; }
+
+  /* حركة الرفع + ظل */
+  .tile-lift{ @apply transition-transform transition-shadow duration-300 ease-out; }
+  .tile-lift:hover{
+    @apply -translate-y-1.5 shadow-2xl;
+    box-shadow: 0 18px 48px rgba(79,70,229,.20), 0 8px 24px rgba(0,0,0,.18);
+  }
+
+  .tile-title{ @apply text-lg md:text-xl font-semibold text-neutral-900 dark:text-white; }
+  .tile-sub{ @apply mt-2 text-sm md:text-base text-neutral-600 dark:text-neutral-400; }
+
+  /* دوائر الأيقونات */
+  .icon-pill{ @apply inline-flex items-center justify-center h-10 w-10 rounded-full bg-black/5 dark:bg-white/10; }
+  .icon-pill-lg{ @apply inline-flex items-center justify-center h-14 w-14 md:h-16 md:w-16 rounded-full bg-black/5 dark:bg-white/10; }
+
+  /* “كرت زجاجي” (للاستخدام عند الحاجة) */
+  .glass{ @apply backdrop-blur-md border shadow-xl; }
+  .glass{ @apply bg-white/85 border-black/10; }
+  .dark .glass{ @apply bg-neutral-900/80 border-white/10; }
+}
+
+/* ===== Tables / misc ===== */
+.table{ @apply w-full text-sm; border-collapse: separate; border-spacing: 0; }
+.table th, .table td{
+  @apply border px-3 py-2 text-left align-top border-black/10 dark:border-neutral-800
+         text-neutral-800 dark:text-neutral-100;
+}
+.table tr:hover td{ @apply bg-black/5 dark:bg-neutral-800; }
+.link{ @apply text-indigo-600 hover:underline dark:text-indigo-400; }
+.skeleton{ @apply animate-pulse rounded-md bg-black/10 dark:bg-neutral-800; }
+
+/* ===== Utilities ===== */
+@layer utilities {
+  .text-brand-indigo{ @apply text-indigo-600; }
+  .bg-brand-indigo{ @apply bg-indigo-600; }
+
+  .hr-base{ @apply mx-auto w-full max-w-5xl h-px bg-black/10 dark:bg-white/10; }
+
+  @keyframes shine{ 0%{background-position:-200% 0} 100%{background-position:200% 0} }
+  .hr-gradient{
+    @apply mx-auto h-[2px] w-56 md:w-72 lg:w-96 rounded-full
+           bg-gradient-to-r from-indigo-600 via-orange-500 to-green-500
+           bg-[length:200%_100%];
+    animation: shine 2.2s linear infinite;
+  }
+
+  .animate-fade-up{ animation: fade-up .6s ease-out both; }
+  @keyframes fade-up{ 0%{opacity:0; transform:translateY(8px);} 100%{opacity:1; transform:translateY(0);} }
+
+  .app-surface{ @apply bg-neutral-50 dark:bg-neutral-950; }
+  .surface{ @apply bg-white text-neutral-900 dark:bg-neutral-950 dark:text-neutral-100; }
+  .surface-plain{ @apply bg-neutral-50 text-neutral-900 dark:bg-neutral-950 dark:text-neutral-100; }
+  .muted{ @apply text-neutral-600 dark:text-neutral-400; }
+}
+
+/* ===== Sidebar-aware layout ===== */
+@media (min-width: 1024px) {
+  html[data-sidebar-open="true"] .with-sidebar { padding-left: 16rem; }
+}
+
+/* ===== Print ===== */
+@media print {
+  :root { color-scheme: light; }
+  html, body { background:#fff !important; color:#000 !important; }
+  .tile, .glass { box-shadow:none !important; }
+}
+@layer utilities {
+  /* نزول بسيط من فوق عشان ما يلزق العنوان بزر الـ Theme */
+  .tab-page { @apply mt-6 md:mt-8; }
+
+  /* تنسيق موحّد للعناوين */
+  .tab-title { @apply text-xl font-bold tracking-tight; }
+
+  /* مسافات داخل الصفحة بشكل مريح */
+  .tab-stack { @apply space-y-4 md:space-y-6; }
+}
+:root{
+  /* نصوص ومحاور ووسوم في اللايت */
+  --chart-text: #111827;         /* neutral-900 */
+  --chart-grid: #e5e7eb;         /* neutral-200 */
+  --tooltip-bg: #ffffff;
+  --tooltip-border: rgba(0,0,0,.1);
+}
+
+.dark{
+  /* نصوص ومحاور ووسوم في الدارك */
+  --chart-text: #e5e7eb;         /* neutral-200 */
+  --chart-grid: #262626;         /* neutral-800 */
+  --tooltip-bg: #0a0a0a;
+  --tooltip-border: #333333;
+}
+
+/* تحسين افتراضي لـ Recharts (لو ما مرّرنا contentStyle) */
+.recharts-default-tooltip{
+  background: var(--tooltip-bg) !important;
+  border: 1px solid var(--tooltip-border) !important;
+  color: var(--chart-text) !important;
+  backdrop-filter: blur(6px);
+}
+.recharts-legend-item-text{
+  color: var(--chart-text) !important;
+}
