@@ -3,7 +3,7 @@ import { supabase } from '../supabaseClient'
 
 function getApiBaseUrl(): string {
   const stored = localStorage.getItem('smart-dataguard-api-url')
-  return stored || (import.meta.env.VITE_API_BASE_URL as string) || 'http://34.9.122.91:8001'
+  return stored || (import.meta.env.VITE_API_BASE_URL as string) || ''
 }
 
 export const api = axios.create({
