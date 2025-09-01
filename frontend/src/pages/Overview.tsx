@@ -12,17 +12,13 @@ import {
   LayoutDashboard,
   Database as DatabaseIcon,
 } from 'lucide-react'
+import Logo from '../components/logo'
 
 function HeroBrand() {
   return (
-    <div className="select-none leading-none font-extrabold tracking-tight text-center ">
-      <div className="font-ar text-black dark:text-white
-                      text-[64px] md:text-[84px] lg:text-[96px]">
-        مُحْكَم
-      </div>
-      <div className="font-latin text-brand-indigo
-                      text-[28px] md:text-[32px] lg:text-[36px] mt-1 md:mt-2">
-        MUHKAM
+    <div className="select-none leading-none text-center">
+      <div className="grid justify-items-center">
+        <Logo className="h-32 md:h-40 w-auto" aria-label="MUHKAM" />
       </div>
     </div>
   )

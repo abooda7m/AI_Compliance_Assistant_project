@@ -96,7 +96,7 @@ export default function UploadPage() {
   }
 
   return (
-<div className="tab-page tab-stack">
+    <div className="tab-page tab-stack">
       {/* Upload card */}
       <div className="card">
         <div className="card-header">
@@ -120,27 +120,29 @@ export default function UploadPage() {
               </div>
 
               <div className="flex items-center gap-2">
+                {/* Primary button = #94b1b5 */}
                 <button
                   type="button"
                   onClick={doUpload}
                   disabled={isUploading}
                   className="inline-flex h-10 items-center justify-center rounded-lg px-4 text-sm font-semibold
-                             text-white bg-indigo-600 hover:bg-indigo-600/90
-                             focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60
+                             text-white bg-[#94b1b5] hover:bg-[#7fa0a5]
+                             focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#94b1b5]/60
                              disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   {isUploading ? 'Uploading…' : 'Upload'}
                 </button>
 
+                {/* Secondary (gray) */}
                 <button
                   type="button"
                   onClick={() => { if (!isUploading) { setFile(null); setProgress(0) } }}
                   disabled={isUploading}
                   title="Clear selected file"
                   className="inline-flex h-10 items-center justify-center rounded-lg px-4 text-sm font-medium
-                             border border-indigo-500 text-indigo-600 bg-transparent hover:bg-indigo-50
-                             dark:text-indigo-300 dark:border-indigo-400/60 dark:hover:bg-white/5
-                             focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40
+                             border border-neutral-300 text-neutral-700 bg-transparent hover:bg-black/5
+                             dark:text-neutral-200 dark:border-white/20 dark:hover:bg-white/10
+                             focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20 dark:focus-visible:ring-white/20
                              disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   Clear
@@ -153,7 +155,7 @@ export default function UploadPage() {
             <div className="w-full">
               <div className="h-2 w-full rounded-full overflow-hidden bg-black/10 dark:bg-white/10">
                 <div
-                  className="h-2 bg-indigo-600 transition-all"
+                  className="h-2 bg-[#94b1b5] transition-all"
                   style={{ width: `${progress}%` }}
                   aria-valuenow={progress}
                   aria-valuemin={0}
@@ -203,14 +205,15 @@ export default function UploadPage() {
                     </td>
                     <td className="whitespace-nowrap">
                       <div className="flex items-center gap-2 flex-wrap md:flex-nowrap">
+                        {/* Secondary gray outline */}
                         <button
                           type="button"
                           onClick={() => runSens(d.id)}
                           disabled={!!sensLoading[d.id]}
                           aria-live="polite"
                           className="inline-flex h-9 min-w-[9.5rem] justify-center items-center gap-2 rounded-lg px-3 text-sm font-medium
-                                     border border-indigo-500 text-indigo-600 bg-transparent hover:bg-indigo-50
-                                     dark:text-indigo-300 dark:border-indigo-400/60 dark:hover:bg-white/5
+                                     border border-neutral-300 text-neutral-700 bg-transparent hover:bg-black/5
+                                     dark:text-neutral-200 dark:border-white/20 dark:hover:bg-white/10
                                      disabled:opacity-60 disabled:cursor-not-allowed"
                         >
                           {sensLoading[d.id]
@@ -218,14 +221,15 @@ export default function UploadPage() {
                             : 'Run Sensitivity'}
                         </button>
 
+                        {/* Secondary gray outline */}
                         <button
                           type="button"
                           onClick={() => runAudit(d.id)}
                           disabled={!!auditLoading[d.id]}
                           aria-live="polite"
                           className="inline-flex h-9 min-w-[9.5rem] justify-center items-center gap-2 rounded-lg px-3 text-sm font-medium
-                                     border border-indigo-500 text-indigo-600 bg-transparent hover:bg-indigo-50
-                                     dark:text-indigo-300 dark:border-indigo-400/60 dark:hover:bg-white/5
+                                     border border-neutral-300 text-neutral-700 bg-transparent hover:bg-black/5
+                                     dark:text-neutral-200 dark:border-white/20 dark:hover:bg-white/10
                                      disabled:opacity-60 disabled:cursor-not-allowed"
                         >
                           {auditLoading[d.id]

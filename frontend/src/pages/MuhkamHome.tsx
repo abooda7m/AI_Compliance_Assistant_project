@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { useEffect, useRef, useState } from 'react'
 import TopControls from '../components/TopControls'
 import { useI18n } from '../lib/i18n'
+import Logo from '../components/logo'
 
 export default function MuhkamHome() {
   const { t } = useI18n()
@@ -59,10 +60,15 @@ export default function MuhkamHome() {
       <div className="relative">
         {/* HERO */}
         <header className="container-max min-h-[100svh] pt-24 md:pt-32 pb-24 text-center animate-fade-up">
-          <h1 className="mt-6 font-ar font-extrabold leading-[1.1] tracking-tight">
-            <span className="block text-5xl md:text-7xl lg:text-8xl">مُحْكَم</span>
-            <span className="block mt-1 text-2xl md:text-3xl lg:text-4xl text-brand-indigo">MUHKAM</span>
-          </h1>
+          <h1 className="sr-only">MUHKAM مُحْكَم</h1>
+
+          <div className="flex items-center justify-center">
+            <Logo
+              className="h-32 md:h-40 lg:h-48 w-auto translate-x-3 md:translate-x-5
+                         drop-shadow-[0_0_20px_rgba(0,0,0,0.08)] dark:drop-shadow-[0_0_16px_rgba(0,0,0,0.40)]"
+              alt="MUHKAM"
+            />
+          </div>
 
           <p className="mt-6 md:mt-7 text-base md:text-xl lg:text-2xl text-neutral-700 dark:text-white/90">
             {t('home.hero.tagline')}

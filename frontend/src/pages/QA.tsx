@@ -23,7 +23,6 @@ export default function QAPage() {
 
   const uid = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 
-  /** Render assistant text into tidy paragraphs/lists */
   function renderAnswer(text: string) {
     const lines = text.replace(/\r\n?/g, '\n').split('\n')
     const nodes: JSX.Element[] = []
@@ -69,7 +68,6 @@ export default function QAPage() {
     return <div className="space-y-3">{nodes}</div>
   }
 
-  /** Ask flow */
   const ask = async (textOverride?: string) => {
     if (loading) return
     const text = (textOverride ?? q).trim()
@@ -97,7 +95,6 @@ export default function QAPage() {
     }
   }
 
-  /** Keyboard UX */
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key !== 'Enter') return
     const forceSend = e.ctrlKey || e.metaKey
@@ -108,7 +105,6 @@ export default function QAPage() {
     }
   }
 
-  /** Auto-grow textarea height */
   const onAutoGrow = (e: React.FormEvent<HTMLTextAreaElement>) => {
     const ta = e.currentTarget
     ta.style.height = 'auto'
@@ -141,25 +137,22 @@ export default function QAPage() {
                 key={m.id}
                 className={`flex items-start gap-3 ${isUser ? 'justify-end' : 'justify-start'} group`}
               >
-                {/* Avatar */}
                 {!isUser && (
                   <div className="mt-0.5 shrink-0 inline-flex h-8 w-8 items-center justify-center rounded-full bg-black/5 text-neutral-600 dark:bg-white/10 dark:text-neutral-300">
                     {isAI ? <Bot size={16} /> : <span className="text-xs font-semibold">!</span>}
                   </div>
                 )}
 
-                {/* Bubble */}
                 <div
                   className={[
                     'relative max-w-[min(78ch,80%)] rounded-2xl px-4 py-3 text-[14px] leading-relaxed shadow-sm',
                     isUser
-                      ? 'bg-indigo-600 text-white'
+                      ? 'bg-[#94b1b5] text-white'
                       : isErr
                         ? 'bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-900/20 dark:text-rose-200 dark:border-rose-800/40'
                         : 'bg-black/5 text-neutral-900 dark:bg-white/10 dark:text-neutral-100',
                   ].join(' ')}
                 >
-                  {/* Copy on AI */}
                   {isAI && (
                     <button
                       onClick={() => copyText(m.content)}
@@ -172,14 +165,10 @@ export default function QAPage() {
                   )}
 
                   {isAI ? renderAnswer(m.content) : <pre className="whitespace-pre-wrap">{m.content}</pre>}
-
-                  {/* Citations */}
-                 
                 </div>
 
-                {/* User avatar (on the right) */}
                 {isUser && (
-                  <div className="mt-0.5 shrink-0 inline-flex h-8 w-8 items-center justify-center rounded-full bg-indigo-600 text-white">
+                  <div className="mt-0.5 shrink-0 inline-flex h-8 w-8 items-center justify-center rounded-full bg-[#94b1b5] text-white">
                     <User size={16} />
                   </div>
                 )}
@@ -208,7 +197,7 @@ export default function QAPage() {
           <div className="flex items-end gap-2">
             <textarea
               className="input flex-1 resize-none h-[44px] min-h-[44px] max-h-[200px] py-2.5 leading-5"
-              style={{ height: '44px' }} /* keeps initial height perfect */
+              style={{ height: '44px' }}
               placeholder="Ask about SDAIA, PDPL regulations..."
               value={q}
               onChange={(e) => setQ(e.target.value)}
@@ -217,15 +206,14 @@ export default function QAPage() {
               rows={1}
             />
 
-            {/* ======= Button: فقط الشكل/الستايل تم تعديله ======= */}
+            {/* زر الإرسال باللون الجديد */}
             <button
               type="button"
               className={[
                 'inline-flex items-center justify-center gap-2 h-11 min-w-[92px] px-4 rounded-xl font-medium shadow-sm transition-colors',
-                'bg-indigo-600 text-white hover:bg-indigo-500 active:bg-indigo-600',
-                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60',
-                'disabled:opacity-40 disabled:cursor-not-allowed',
-                'dark:bg-indigo-500 dark:hover:bg-indigo-400 dark:active:bg-indigo-500',
+                'bg-[#94b1b5] text-white hover:bg-[#7fa0a5] active:bg-[#94b1b5]',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#94b1b5]/60',
+                'disabled:opacity-40 disabled:cursor-not-allowed'
               ].join(' ')}
               onClick={() => ask()}
               disabled={!q.trim() || loading}
@@ -235,7 +223,6 @@ export default function QAPage() {
               <Send size={16} />
               <span className="hidden sm:inline">Send</span>
             </button>
-            {/* ================================================ */}
           </div>
         </div>
       </section>

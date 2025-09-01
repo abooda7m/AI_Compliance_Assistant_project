@@ -4,7 +4,7 @@ import { supabase } from '../supabaseClient'
 import { Eye, EyeOff } from 'lucide-react'
 import { useI18n } from '../lib/i18n'
 import TopControls from '../components/TopControls'
-import Brand from '../components/Brand'
+import Logo from '../components/logo'
 
 export default function Login() {
   const { t } = useI18n()
@@ -48,7 +48,10 @@ export default function Login() {
       <main className="container-max pt-16 md:pt-20 pb-10">
         {/* Heading */}
         <div className="text-center mb-6 md:mb-8">
-          <h1 className="leading-none"><Brand size="sm" /></h1>
+          <div className="grid justify-items-center">
+            <Logo className="h-16 md:h-38 w-auto" aria-label="MUHKAM" />
+          </div>
+
           <p className="mt-2 text-sm md:text-base muted">
             {t('login.subtitle')}
           </p>

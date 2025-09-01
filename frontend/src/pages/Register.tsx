@@ -4,7 +4,7 @@ import { supabase } from '../supabaseClient'
 import { Eye, EyeOff } from 'lucide-react'
 import { useI18n } from '../lib/i18n'
 import TopControls from '../components/TopControls'
-import Brand from '../components/Brand'
+import Logo from '../components/logo'
 
 export default function Register() {
   const { t } = useI18n()
@@ -71,14 +71,16 @@ export default function Register() {
       <main className="container-max pt-16 md:pt-20 pb-10">
         {/* Heading */}
         <div className="text-center mb-6 md:mb-8">
-          <h1 className="leading-none"><Brand size="sm" /></h1>
+          <div className="grid justify-items-center">
+            <Logo className="h-16 md:h-38 w-auto" aria-label="MUHKAM" />
+          </div>
           <p className="mt-2 text-sm md:text-base muted">
             {t('register.subtitle')}
           </p>
         </div>
 
         {/* Card */}
-        <div className="mx-auto w-full max-w-[560px]">
+        <div className="w-full max-w-[560px] mx-auto">
           <div className="glass rounded-2xl overflow-hidden">
             {/* Tabs header */}
             <div className="flex items-center gap-2 px-4 md:px-6 tabbar border-b">
