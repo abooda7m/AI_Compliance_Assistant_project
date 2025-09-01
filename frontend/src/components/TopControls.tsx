@@ -4,22 +4,26 @@ type Props = {
   showLang?: boolean
   showTheme?: boolean
 }
+
 export default function TopControls({ showLang = true, showTheme = true }: Props) {
   const { theme, setTheme } = useTheme()
   const { lang, setLang } = useLang()
 
+  // الحاوية
   const group =
     'flex items-center gap-0.5 rounded-full p-0.5 backdrop-blur-md ' +
     'border border-black/10 bg-black/5 text-neutral-800 ' +
     'dark:border-white/15 dark:bg-white/10 dark:text-white shadow-card whitespace-nowrap'
 
+  // زر عام
   const btn =
     'px-0 py-1.5 w-[72px] text-center text-xs md:text-sm rounded-full transition-colors ' +
-    'focus:outline-none focus-visible:ring-2 focus-visible:ring-sdaia-indigo/50'
+    'focus:outline-none focus-visible:ring-2 focus-visible:ring-[#94b1b5]/50'
 
+  // حالات اللون
   const active = 'shadow'
-  const activeFilled = 'bg-sdaia-indigo text-white ' + active
-  const activeLight = 'bg-white text-neutral-900 ' + active
+  const activeFilled = 'bg-[#94b1b5] text-white ' + active        // اللون الجديد
+  const activeLight  = 'bg-white text-neutral-900 ' + active      // للـ Light النشط
   const idle = 'hover:bg-black/10 dark:hover:bg-white/10'
 
   return (

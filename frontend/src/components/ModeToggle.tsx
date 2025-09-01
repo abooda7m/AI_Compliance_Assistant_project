@@ -43,8 +43,8 @@ export default function ModeToggle() {
         className={[
           'px-3 py-1.5 rounded-full text-sm transition',
           theme === 'dark'
-            ? 'bg-indigo-600 text-white shadow'
-            : 'hover:bg-black/5 dark:hover:bg-white/10'
+            ? 'bg-[#94b1b5] text-white shadow' // نفس لون primary الجديد
+            : 'bg-black/5 text-neutral-800 dark:bg-white/10 dark:text-white hover:bg-black/10 dark:hover:bg-white/20'
         ].join(' ')}
       >
         Dark
@@ -55,8 +55,8 @@ export default function ModeToggle() {
         className={[
           'px-3 py-1.5 rounded-full text-sm transition',
           theme === 'light'
-            ? 'bg-indigo-600 text-white shadow'
-            : 'hover:bg-black/5 dark:hover:bg-white/10'
+            ? 'bg-[#94b1b5] text-white shadow' // نفس لون primary الجديد
+            : 'bg-black/5 text-neutral-800 dark:bg-white/10 dark:text-white hover:bg-black/10 dark:hover:bg-white/20'
         ].join(' ')}
       >
         Light

@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { supabase } from '../supabaseClient'
+import Logo from './logo'
 
 export default function Sidebar() {
   const [open, setOpen] = useState<boolean>(() => {
@@ -35,7 +36,6 @@ export default function Sidebar() {
     }
   }
 
-  /** Floating toggle button; sits outside when the sidebar is open */
   const ToggleBtn = (
     <button
       aria-label={open ? 'Hide sidebar' : 'Show sidebar'}
@@ -43,9 +43,7 @@ export default function Sidebar() {
       className="fixed top-3 z-50 rounded-full p-2 backdrop-blur-md
                  bg-white/80 text-neutral-800 ring-1 ring-black/10 shadow hover:bg-white
                  dark:bg-neutral-900/80 dark:text-white dark:ring-white/10 dark:hover:bg-neutral-800"
-      style={{
-        left: open ? 'calc(16rem + 12px)' : '12px',
-      }}
+      style={{ left: open ? 'calc(16rem + 12px)' : '12px' }}
     >
       <PanelLeft size={18} />
     </button>
@@ -63,26 +61,20 @@ export default function Sidebar() {
           open ? 'translate-x-0' : '-translate-x-full',
         ].join(' ')}
       >
-        {/* Centered brand: EN on the left, AR on the right (locked order) */}
-        <div className="sidebar-header justify-center">
-          <div dir="ltr" className="flex items-baseline gap-2 select-none">
-            <span className="font-latin font-semibold tracking-wide text-indigo-600 dark:text-indigo-400 text-[15px]">
-              MUHKAM
-            </span>
-            <span className="font-ar font-extrabold text-[18px] text-neutral-900 dark:text-white">
-              مُحْكَم
-            </span>
-          </div>
+        {/* ===== الشعار: ارتفاع ثابت ومنع أي تجاوز ===== */}
+        <div className="sidebar-header h-20 px-4 flex items-center justify-center overflow-hidden border-b border-black/10 dark:border-white/10">
+          {/* غيّر h-12 إلى h-14/h-16 لو حبيت تكبّر */}
+          <Logo className="h-12" alt="MUHKAM" />
         </div>
 
         <nav className="sidebar-nav flex-1">
-          <NavItem to="/overview" icon={<GaugeCircle size={18} />} label="Overview" />
-          <NavItem to="/insights" icon={<BarChart2 size={18} />} label="Dashboard" />
-          <NavItem to="/qa" icon={<MessageSquare size={18} />} label="AI Assistant" />
-          <NavItem to="/upload" icon={<UploadCloud size={18} />} label="Upload" />
-          <NavItem to="/sensitivity" icon={<Shield size={18} />} label="Sensitivity" />
-          <NavItem to="/audit" icon={<ClipboardList size={18} />} label="Audit" />
-          <NavItem to="/db-audit" icon={<Database size={18} />} label="DB Audit" />
+          <NavItem to="/overview"   icon={<GaugeCircle size={18} />}   label="Overview" />
+          <NavItem to="/insights"   icon={<BarChart2 size={18} />}     label="Dashboard" />
+          <NavItem to="/qa"         icon={<MessageSquare size={18} />} label="AI Assistant" />
+          <NavItem to="/upload"     icon={<UploadCloud size={18} />}   label="Upload" />
+          <NavItem to="/sensitivity"icon={<Shield size={18} />}        label="Sensitivity" />
+          <NavItem to="/audit"      icon={<ClipboardList size={18} />} label="Audit" />
+          <NavItem to="/db-audit"   icon={<Database size={18} />}      label="DB Audit" />
         </nav>
 
         <div className="p-3 border-t border-black/10 dark:border-white/10">
@@ -98,7 +90,6 @@ export default function Sidebar() {
         </div>
       </aside>
 
-      {/* Spacer for routes that don't add left padding via .with-sidebar */}
       <div className={`transition-all duration-300 ${open ? 'ml-64' : 'ml-0'}`} />
     </>
   )
@@ -116,9 +107,7 @@ function NavItem({
   return (
     <NavLink
       to={to}
-      className={({ isActive }) =>
-        ['sidebar-link', isActive ? 'active' : ''].join(' ')
-      }
+      className={({ isActive }) => ['sidebar-link', isActive ? 'active' : ''].join(' ')}
     >
       <span className="shrink-0 opacity-80">{icon}</span>
       <span className="truncate">{label}</span>
