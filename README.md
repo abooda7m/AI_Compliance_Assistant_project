@@ -53,7 +53,8 @@ AI_Compliance_Assistant_project-master/
 │   └── package.json       # Node dependencies
 │
 ├── docs/
-│   └── homepage.png       # Screenshots of the app
+│   ├── Muhkam_documentation.docx  # Muhkam_documentation
+    └── homepage.png               # Screenshots of the app
 │
 └── README.md              # You are reading it!
 ```
