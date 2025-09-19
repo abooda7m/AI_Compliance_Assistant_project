@@ -1,4 +1,4 @@
-# MUHKAM – AI Compliance Assistant for Saudi Regulations
+# MUHKAM – AI Compliance Agent for Saudi Regulations
 
 MUHKAM (Arabic: **مُحْكَم**) is a **smart compliance platform** tailored for organisations operating in the Kingdom of Saudi Arabia.  It helps you audit internal documents, databases and scanned records against local privacy and cybersecurity frameworks—such as the **Personal Data Protection Law (PDPL)** and the **National Cybersecurity Authority (NCA)** Essential Cybersecurity Controls—using large‑language models and retrieval‑augmented generation.
 
